@@ -1,0 +1,1060 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Детектор положения — Face Mesh</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: 'Segoe UI', Roboto, system-ui, sans-serif;
+            background: #0b1729;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 12px;
+            color: #fff;
+        }
+        .container {
+            max-width: 720px;
+            width: 100%;
+            background: #1a2b3f;
+            border-radius: 40px;
+            padding: 22px 18px 28px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.7);
+            text-align: center;
+            border: 1px solid #314a66;
+        }
+        h1 {
+            font-weight: 500;
+            font-size: 1.6rem;
+            letter-spacing: 0.5px;
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+        h1 small {
+            font-size: 0.9rem;
+            opacity: 0.6;
+            font-weight: 300;
+        }
+        .video-wrapper {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 4 / 3;
+            background: #0a121c;
+            border-radius: 28px;
+            overflow: hidden;
+            margin: 14px 0 18px;
+            border: 2px solid #3f597a;
+            box-shadow: inset 0 0 30px rgba(0,0,0,0.8);
+        }
+        #video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+            transform: scaleX(-1);
+        }
+        #faceCanvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            transform: scaleX(-1);
+        }
+        .live-status {
+            position: absolute;
+            top: 16px;
+            left: 16px;
+            right: 16px;
+            display: flex;
+            justify-content: center;
+            pointer-events: none;
+            z-index: 10;
+        }
+        .status-badge {
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(10px);
+            padding: 10px 28px;
+            border-radius: 60px;
+            font-size: 1.5rem;
+            font-weight: 600;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            transition: all 0.15s ease;
+            letter-spacing: 0.3px;
+        }
+        .status-badge .icon {
+            font-size: 2rem;
+            line-height: 1;
+        }
+        .status-safe {
+            background: rgba(34, 197, 94, 0.3);
+            border-color: #4ade80;
+            color: #dcfce7;
+            box-shadow: 0 0 20px rgba(34, 197, 94, 0.2);
+        }
+        .status-warning {
+            background: rgba(251, 191, 36, 0.35);
+            border-color: #fbbf24;
+            color: #fef3c7;
+            box-shadow: 0 0 20px rgba(251, 191, 36, 0.15);
+        }
+        .status-danger {
+            background: rgba(239, 68, 68, 0.4);
+            border-color: #f87171;
+            color: #fecaca;
+            animation: pulse-danger 1.2s infinite;
+            box-shadow: 0 0 30px rgba(239, 68, 68, 0.3);
+        }
+        @keyframes pulse-danger {
+            0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.5); }
+            70% { box-shadow: 0 0 0 18px rgba(239, 68, 68, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+
+        .info-panel {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            background: #142433;
+            padding: 12px 18px;
+            border-radius: 40px;
+            margin: 6px 0 14px;
+            flex-wrap: wrap;
+            font-size: 0.95rem;
+            border: 1px solid #2d4560;
+        }
+        .info-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            opacity: 0.9;
+        }
+        .info-item span {
+            font-weight: 600;
+            color: #b6d0e8;
+        }
+        .live-indicator {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+            background: #4ade80;
+            transition: 0.2s;
+        }
+        .dot-warning {
+            background: #fbbf24;
+            animation: pulse-warning 1s infinite;
+        }
+        .dot-danger {
+            background: #f87171;
+            animation: blink-dot 0.8s infinite;
+        }
+        @keyframes pulse-warning {
+            0% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(0.9); }
+            100% { opacity: 1; transform: scale(1); }
+        }
+        @keyframes blink-dot {
+            0% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.3; transform: scale(0.8); }
+            100% { opacity: 1; transform: scale(1); }
+        }
+
+        .btn-group {
+            display: flex;
+            justify-content: center;
+            gap: 14px;
+            flex-wrap: wrap;
+            margin: 8px 0 6px;
+        }
+        .btn {
+            background: #2f4460;
+            border: none;
+            color: white;
+            padding: 12px 28px;
+            border-radius: 60px;
+            font-size: 1.1rem;
+            font-weight: 500;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+            transition: 0.2s;
+            border: 1px solid #4a637f;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+            flex: 1 1 auto;
+            justify-content: center;
+        }
+        .btn-primary {
+            background: #3b6ea0;
+            border-color: #6b9ed4;
+        }
+        .btn-primary:hover:not(:disabled) {
+            background: #4a7fb3;
+            transform: scale(1.02);
+        }
+        .btn-danger {
+            background: #b13e3e;
+            border-color: #d66a6a;
+        }
+        .btn-danger:hover:not(:disabled) {
+            background: #c44a4a;
+        }
+        .btn-secondary {
+            background: #2d5a7a;
+            border-color: #4f8ab0;
+        }
+        .btn-secondary:hover:not(:disabled) {
+            background: #3a6f94;
+        }
+        .btn:disabled {
+            opacity: 0.4;
+            transform: none;
+            pointer-events: none;
+        }
+
+        #log {
+            background: #0c1a28;
+            padding: 8px 16px;
+            border-radius: 40px;
+            font-size: 0.9rem;
+            color: #9bb7d4;
+            margin-top: 12px;
+            border: 1px solid #2a4058;
+            min-height: 2.8rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .footnote {
+            font-size: 0.75rem;
+            opacity: 0.45;
+            margin-top: 14px;
+            letter-spacing: 0.3px;
+        }
+
+        .gallery-section {
+            margin-top: 16px;
+            border-top: 1px solid #2d4560;
+            padding-top: 14px;
+        }
+        .gallery-title {
+            font-size: 0.9rem;
+            opacity: 0.7;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .gallery-title span {
+            background: #2d4560;
+            padding: 2px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+        }
+        .gallery-title .info-text {
+            background: none;
+            font-size: 0.7rem;
+            opacity: 0.5;
+            padding: 0;
+        }
+        .gallery-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+            gap: 10px;
+            max-height: 300px;
+            overflow-y: auto;
+            padding: 4px;
+        }
+        .gallery-grid::-webkit-scrollbar {
+            width: 4px;
+        }
+        .gallery-grid::-webkit-scrollbar-track {
+            background: #0c1a28;
+            border-radius: 10px;
+        }
+        .gallery-grid::-webkit-scrollbar-thumb {
+            background: #3f597a;
+            border-radius: 10px;
+        }
+        .gallery-item {
+            background: #0c1a28;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid #2d4560;
+            position: relative;
+        }
+        .gallery-item img {
+            width: 100%;
+            aspect-ratio: 4/3;
+            object-fit: cover;
+            display: block;
+        }
+        .gallery-item .badge {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            font-size: 0.6rem;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-weight: 600;
+        }
+        .badge-side {
+            background: #fbbf24;
+            color: #0b1729;
+        }
+        .badge-stomach {
+            background: #ef4444;
+            color: white;
+        }
+        .gallery-item .time {
+            font-size: 0.55rem;
+            opacity: 0.6;
+            padding: 4px 6px;
+            text-align: center;
+            background: #0a121c;
+        }
+        .gallery-empty {
+            color: #4a637f;
+            font-size: 0.85rem;
+            padding: 20px;
+            text-align: center;
+            grid-column: 1 / -1;
+        }
+        .clear-btn {
+            background: none;
+            border: 1px solid #4a637f;
+            color: #9bb7d4;
+            padding: 2px 14px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 0.7rem;
+            transition: 0.2s;
+        }
+        .clear-btn:hover {
+            background: #4a637f;
+            color: white;
+        }
+        @media (max-width: 500px) {
+            .container { padding: 14px; }
+            .status-badge { font-size: 1.2rem; padding: 6px 16px; gap: 6px; }
+            .status-badge .icon { font-size: 1.5rem; }
+            .btn { padding: 10px 14px; font-size: 0.95rem; }
+            .info-panel { font-size: 0.8rem; padding: 8px 12px; }
+            .gallery-grid {
+                grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>
+        👶 Монитор <small>Face Mesh</small>
+    </h1>
+
+    <div class="video-wrapper">
+        <video id="video" autoplay playsinline muted></video>
+        <canvas id="faceCanvas"></canvas>
+        <div class="live-status">
+            <div id="statusBadge" class="status-badge status-safe">
+                <span class="icon">✅</span>
+                <span id="statusText">На спине</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="info-panel">
+        <div class="info-item">📷 <span id="cameraState">Ожидание</span></div>
+        <div class="info-item live-indicator">
+            <span id="liveDot" class="dot"></span>
+            <span id="liveLabel">Онлайн</span>
+        </div>
+        <div class="info-item">🔄 <span id="detectState">Готов</span></div>
+        <div class="info-item">⏱ <span id="timerDisplay">0с</span></div>
+    </div>
+
+    <div class="btn-group">
+        <button id="startBtn" class="btn btn-primary">▶ Запуск</button>
+        <button id="switchCamBtn" class="btn btn-secondary" disabled>🔄 Сменить камеру</button>
+        <button id="stopBtn" class="btn btn-danger" disabled>⏹ Стоп</button>
+    </div>
+
+    <div id="log">
+        <span>🟢 Нажмите «Запуск» для начала мониторинга</span>
+    </div>
+
+    <div class="gallery-section">
+        <div class="gallery-title">
+            <span>📸 Зафиксированные моменты</span>
+            <span class="info-text">каждые 20 секунд</span>
+            <span id="captureCount">0</span>
+            <button class="clear-btn" id="clearGalleryBtn">Очистить</button>
+        </div>
+        <div class="gallery-grid" id="galleryGrid">
+            <div class="gallery-empty">Здесь будут снимки при переворотах на бок или живот</div>
+        </div>
+    </div>
+
+    <div class="footnote">🔊 Звуковая тревога при положении на животе. Скриншоты — каждые 20 секунд.</div>
+</div>
+
+<!-- Подключаем MediaPipe Face Mesh -->
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/face_mesh.js" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js" crossorigin="anonymous"></script>
+
+<script>
+    (function() {
+        // --- DOM ---
+        const video = document.getElementById('video');
+        const canvas = document.getElementById('faceCanvas');
+        const ctx = canvas.getContext('2d');
+        const statusBadge = document.getElementById('statusBadge');
+        const statusText = document.getElementById('statusText');
+        const cameraState = document.getElementById('cameraState');
+        const detectState = document.getElementById('detectState');
+        const logEl = document.getElementById('log');
+        const liveDot = document.getElementById('liveDot');
+        const liveLabel = document.getElementById('liveLabel');
+        const galleryGrid = document.getElementById('galleryGrid');
+        const captureCount = document.getElementById('captureCount');
+        const timerDisplay = document.getElementById('timerDisplay');
+
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const switchCamBtn = document.getElementById('switchCamBtn');
+        const clearGalleryBtn = document.getElementById('clearGalleryBtn');
+
+        // --- состояние ---
+        let stream = null;
+        let animationId = null;
+        let isRunning = false;
+        let currentPosition = 'back';
+        let lastPosition = 'back';
+        let currentFacing = 'environment';
+        let captureHistory = [];
+        
+        const CAPTURE_INTERVAL = 20000;
+        let lastCaptureTime = 0;
+        let timeSinceLastCapture = 0;
+        let timerInterval = null;
+
+        let audioCtx = null;
+        let alarmInterval = null;
+
+        // --- MediaPipe Face Mesh ---
+        let faceMesh = null;
+        let lastFaceData = null;
+        let frameCount = 0;
+
+        function logMessage(msg, isWarning = false) {
+            const time = new Date().toLocaleTimeString();
+            const prefix = isWarning ? '⚠️' : 'ℹ️';
+            logEl.innerHTML = `<span>${prefix} [${time}] ${msg}</span>`;
+        }
+
+        // --- ЗВУК ---
+        function playAlarmBeep() {
+            try {
+                if (!audioCtx) {
+                    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+                if (audioCtx.state === 'suspended') {
+                    audioCtx.resume();
+                }
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'square';
+                osc.frequency.value = 780;
+                gain.gain.value = 0.3;
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.18);
+
+                setTimeout(() => {
+                    try {
+                        const osc2 = audioCtx.createOscillator();
+                        const gain2 = audioCtx.createGain();
+                        osc2.type = 'sawtooth';
+                        osc2.frequency.value = 620;
+                        gain2.gain.value = 0.15;
+                        osc2.connect(gain2);
+                        gain2.connect(audioCtx.destination);
+                        osc2.start();
+                        osc2.stop(audioCtx.currentTime + 0.12);
+                    } catch (_) {}
+                }, 80);
+            } catch (e) { /* игнорируем */ }
+        }
+
+        function startAlarmLoop() {
+            if (alarmInterval) return;
+            playAlarmBeep();
+            alarmInterval = setInterval(() => {
+                if (isRunning && currentPosition === 'stomach') {
+                    playAlarmBeep();
+                } else {
+                    stopAlarmLoop();
+                }
+            }, 1000);
+        }
+
+        function stopAlarmLoop() {
+            if (alarmInterval) {
+                clearInterval(alarmInterval);
+                alarmInterval = null;
+            }
+        }
+
+        // --- ТАЙМЕР ---
+        function startTimer() {
+            if (timerInterval) return;
+            timeSinceLastCapture = 0;
+            timerInterval = setInterval(() => {
+                timeSinceLastCapture += 1000;
+                const seconds = Math.floor(timeSinceLastCapture / 1000);
+                timerDisplay.textContent = `${seconds}с`;
+                if (timeSinceLastCapture >= CAPTURE_INTERVAL) {
+                    timeSinceLastCapture = 0;
+                    if (currentPosition === 'side' || currentPosition === 'stomach') {
+                        takeScreenshot(currentPosition);
+                    }
+                }
+            }, 1000);
+        }
+
+        function stopTimer() {
+            if (timerInterval) {
+                clearInterval(timerInterval);
+                timerInterval = null;
+            }
+            timerDisplay.textContent = '0с';
+            timeSinceLastCapture = 0;
+        }
+
+        // --- СКРИНШОТ ---
+        function takeScreenshot(position) {
+            const now = Date.now();
+            if (now - lastCaptureTime < 15000) return;
+            lastCaptureTime = now;
+            timeSinceLastCapture = 0;
+
+            const w = video.videoWidth;
+            const h = video.videoHeight;
+            if (!w || !h) return;
+
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = w;
+            tempCanvas.height = h;
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCtx.drawImage(video, 0, 0, w, h);
+
+            const dataUrl = tempCanvas.toDataURL('image/jpeg', 0.8);
+            const date = new Date();
+            const timeStr = date.toLocaleTimeString();
+            const dateStr = date.toLocaleDateString();
+
+            const entry = {
+                dataUrl: dataUrl,
+                position: position,
+                time: timeStr,
+                date: dateStr,
+                timestamp: now
+            };
+
+            captureHistory.unshift(entry);
+            if (captureHistory.length > 50) {
+                captureHistory.pop();
+            }
+
+            renderGallery();
+            const posName = position === 'side' ? 'БОК' : 'ЖИВОТ';
+            logMessage(`📸 Скриншот (${posName}) ${timeStr}`, true);
+        }
+
+        // --- ГАЛЕРЕЯ ---
+        function renderGallery() {
+            if (captureHistory.length === 0) {
+                galleryGrid.innerHTML = `<div class="gallery-empty">Здесь будут снимки при переворотах на бок или живот</div>`;
+                captureCount.textContent = '0';
+                return;
+            }
+
+            let html = '';
+            captureHistory.forEach((entry) => {
+                const badgeClass = entry.position === 'side' ? 'badge-side' : 'badge-stomach';
+                const label = entry.position === 'side' ? 'БОК' : 'ЖИВОТ';
+                html += `
+                    <div class="gallery-item">
+                        <img src="${entry.dataUrl}" alt="Скриншот ${label}" loading="lazy">
+                        <span class="badge ${badgeClass}">${label}</span>
+                        <div class="time">${entry.time} ${entry.date}</div>
+                    </div>
+                `;
+            });
+
+            galleryGrid.innerHTML = html;
+            captureCount.textContent = captureHistory.length;
+        }
+
+        function clearGallery() {
+            captureHistory = [];
+            renderGallery();
+            logMessage('🗑️ Галерея очищена');
+        }
+        clearGalleryBtn.addEventListener('click', clearGallery);
+
+        // ============================================
+        // MEDIAPIPE FACE MESH — ТОЧКИ НА ЛИЦЕ
+        // ============================================
+        function initFaceMesh() {
+            faceMesh = new FaceMesh({
+                locateFile: (file) => {
+                    return `https://cdn.jsdelivr.net/npm/@mediapipe/face_mesh/${file}`;
+                }
+            });
+
+            faceMesh.setOptions({
+                maxNumFaces: 1,
+                refineLandmarks: true,
+                minDetectionConfidence: 0.5,
+                minTrackingConfidence: 0.5
+            });
+
+            faceMesh.onResults((results) => {
+                if (results.multiFaceLandmarks && results.multiFaceLandmarks.length > 0) {
+                    lastFaceData = results.multiFaceLandmarks[0];
+                    drawFaceMesh(lastFaceData);
+                    analyzePosition(lastFaceData);
+                } else {
+                    lastFaceData = null;
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    ctx.fillStyle = 'rgba(255,255,255,0.2)';
+                    ctx.font = '18px sans-serif';
+                    ctx.textAlign = 'center';
+                    ctx.fillText('👶 Лицо не найдено', canvas.width/2, canvas.height/2);
+                    // Если лицо не найдено — считаем что на спине (безопасно)
+                    if (isRunning) {
+                        updateStatus('back');
+                    }
+                }
+            });
+        }
+
+        // --- РИСОВАНИЕ ТОЧЕК НА ЛИЦЕ (ЭКЗОСКЕЛЕТ) ---
+        function drawFaceMesh(landmarks) {
+            const w = canvas.width;
+            const h = canvas.height;
+            ctx.clearRect(0, 0, w, h);
+
+            if (!landmarks) return;
+
+            // Конвертируем координаты
+            const points = landmarks.map(lm => ({
+                x: lm.x * w,
+                y: lm.y * h,
+                z: lm.z
+            }));
+
+            // === РИСУЕМ ВСЕ ТОЧКИ (468 точек) ===
+            ctx.shadowColor = '#00ff88';
+            ctx.shadowBlur = 8;
+
+            // Точки лица (зелёные)
+            for (let i = 0; i < points.length; i++) {
+                const p = points[i];
+                let size = 2;
+                // Крупнее на контурах глаз, бровей, губ
+                if (i >= 33 && i <= 133) size = 3; // левый глаз
+                else if (i >= 263 && i <= 362) size = 3; // правый глаз
+                else if (i >= 0 && i <= 17) size = 3; // контур лица
+                else if (i >= 61 && i <= 78) size = 3; // губы
+                else if (i >= 105 && i <= 114) size = 3; // нос
+                else if (i >= 276 && i <= 282) size = 3; // брови
+                
+                ctx.fillStyle = '#00ff88';
+                ctx.beginPath();
+                ctx.arc(p.x, p.y, size, 0, Math.PI * 2);
+                ctx.fill();
+            }
+
+            // === СОЕДИНЯЕМ ТОЧКИ ЛИНИЯМИ (экзоскелет лица) ===
+            ctx.shadowBlur = 4;
+            ctx.strokeStyle = 'rgba(0, 255, 136, 0.15)';
+            ctx.lineWidth = 0.8;
+
+            // Соединяем точки в треугольники (простая сетка)
+            const connections = [
+                // Контур лица
+                [0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 6], [6, 7], [7, 8],
+                [8, 9], [9, 10], [10, 11], [11, 12], [12, 13], [13, 14], [14, 15], [15, 16],
+                // Глаза
+                [33, 34], [34, 35], [35, 36], [36, 37], [37, 38], [38, 39], [39, 40],
+                [263, 264], [264, 265], [265, 266], [266, 267], [267, 268], [268, 269], [269, 270],
+                // Губы
+                [61, 62], [62, 63], [63, 64], [64, 65], [65, 66], [66, 67], [67, 68],
+                [68, 69], [69, 70], [70, 71], [71, 72], [72, 73], [73, 74], [74, 75],
+                [75, 76], [76, 77], [77, 78], [78, 61],
+                // Нос
+                [105, 106], [106, 107], [107, 108], [108, 109], [109, 110],
+                [110, 111], [111, 112], [112, 113], [113, 114],
+                // Брови
+                [276, 277], [277, 278], [278, 279], [279, 280], [280, 281], [281, 282],
+                [283, 284], [284, 285], [285, 286], [286, 287], [287, 288], [288, 289],
+            ];
+
+            for (let conn of connections) {
+                const p1 = points[conn[0]];
+                const p2 = points[conn[1]];
+                if (p1 && p2) {
+                    ctx.beginPath();
+                    ctx.moveTo(p1.x, p1.y);
+                    ctx.lineTo(p2.x, p2.y);
+                    ctx.stroke();
+                }
+            }
+
+            ctx.shadowBlur = 0;
+        }
+
+        // --- АНАЛИЗ ПОЛОЖЕНИЯ ПО ТОЧКАМ ЛИЦА ---
+        function analyzePosition(landmarks) {
+            if (!landmarks || !isRunning) return;
+
+            const w = canvas.width;
+            const h = canvas.height;
+            
+            // Берём ключевые точки лица
+            const nose = landmarks[1];      // кончик носа
+            const leftEye = landmarks[33];   // левый глаз
+            const rightEye = landmarks[263]; // правый глаз
+            const mouth = landmarks[13];     // рот
+            const leftCheek = landmarks[234];
+            const rightCheek = landmarks[454];
+
+            // Вычисляем центр лица
+            const centerX = (leftEye.x + rightEye.x) / 2;
+            const centerY = (leftEye.y + rightEye.y) / 2;
+
+            // Асимметрия (насколько повёрнута голова)
+            const eyeDistance = Math.abs(leftEye.x - rightEye.x);
+            const eyeYDiff = leftEye.y - rightEye.y;
+            
+            // Наклон головы
+            const tiltAngle = Math.atan2(eyeYDiff, leftEye.x - rightEye.x) * 180 / Math.PI;
+            
+            // Смещение носа относительно центра
+            const noseOffset = Math.abs(nose.x - centerX) / (eyeDistance || 1);
+            
+            // Вертикальное положение
+            const verticalRatio = (nose.y - leftEye.y) / (mouth.y - leftEye.y || 1);
+
+            // --- ОПРЕДЕЛЯЕМ ПОЛОЖЕНИЕ ---
+            let position = 'back';
+
+            // Если лицо сильно повёрнуто в сторону
+            if (Math.abs(tiltAngle) > 25) {
+                position = 'side';
+            }
+            // Если нос сильно смещён в сторону (поворот головы)
+            else if (noseOffset > 0.35) {
+                position = 'side';
+            }
+            // Если голова наклонена вниз (лицо вниз — живот)
+            else if (verticalRatio > 1.3 && nose.y > mouth.y) {
+                position = 'stomach';
+            }
+            // Если голова сильно наклонена вперёд
+            else if (nose.y - leftEye.y > 0.6 * (mouth.y - leftEye.y)) {
+                position = 'stomach';
+            }
+            // Если лицо сильно смещено вверх (лёжа на спине)
+            else if (nose.y < 0.3 && leftEye.y < 0.3) {
+                position = 'back';
+            }
+            // По умолчанию — спина
+            else {
+                position = 'back';
+            }
+
+            updateStatus(position);
+        }
+
+        // --- ОБНОВЛЕНИЕ СТАТУСА ---
+        function updateStatus(position) {
+            currentPosition = position;
+
+            let icon, text, className, dotClass, labelText, stateText, stateColor;
+
+            switch(position) {
+                case 'back':
+                    icon = '✅';
+                    text = 'На спине';
+                    className = 'status-safe';
+                    dotClass = 'dot';
+                    labelText = 'Онлайн';
+                    stateText = 'Безопасно';
+                    stateColor = '#86efac';
+                    stopAlarmLoop();
+                    break;
+                case 'side':
+                    icon = '⚠️';
+                    text = 'На боку';
+                    className = 'status-warning';
+                    dotClass = 'dot dot-warning';
+                    labelText = 'Бок';
+                    stateText = 'На боку';
+                    stateColor = '#fbbf24';
+                    stopAlarmLoop();
+                    break;
+                case 'stomach':
+                    icon = '🔴';
+                    text = 'НА ЖИВОТЕ!';
+                    className = 'status-danger';
+                    dotClass = 'dot dot-danger';
+                    labelText = 'ТРЕВОГА';
+                    stateText = '⚠️ ОПАСНО!';
+                    stateColor = '#fca5a5';
+                    startAlarmLoop();
+                    break;
+            }
+
+            statusBadge.className = `status-badge ${className}`;
+            statusText.innerText = text;
+            document.querySelector('.status-badge .icon').innerHTML = icon;
+            liveDot.className = dotClass;
+            liveLabel.innerText = labelText;
+            detectState.innerText = stateText;
+            detectState.style.color = stateColor;
+
+            if (lastPosition !== position) {
+                lastPosition = position;
+                const posNames = { back: 'спину', side: 'бок', stomach: 'живот' };
+                logMessage(`🔄 Положение: ${posNames[position]}`);
+                if (position === 'stomach') {
+                    logMessage('🚨 РЕБЁНОК НА ЖИВОТЕ!', true);
+                }
+                if (position === 'side' || position === 'stomach') {
+                    timeSinceLastCapture = CAPTURE_INTERVAL - 5000;
+                }
+            }
+        }
+
+        // --- ЗАПУСК FACE MESH ---
+        async function startFaceMesh() {
+            try {
+                const camera = new Camera(video, {
+                    onFrame: async () => {
+                        if (faceMesh && isRunning) {
+                            try {
+                                await faceMesh.send({ image: video });
+                            } catch (e) {
+                                // игнорируем ошибки
+                            }
+                        }
+                    },
+                    width: 640,
+                    height: 480
+                });
+                await camera.start();
+                cameraState.innerText = 'Активна';
+                logMessage('📷 Камера и Face Mesh запущены');
+                return true;
+            } catch (err) {
+                cameraState.innerText = '❌ Ошибка';
+                logMessage('❌ Ошибка: ' + err.message, true);
+                return false;
+            }
+        }
+
+        // --- КАМЕРА ---
+        async function startCamera(facingMode = 'environment') {
+            try {
+                if (stream) {
+                    stream.getTracks().forEach(t => t.stop());
+                    stream = null;
+                }
+
+                const constraints = {
+                    video: {
+                        facingMode: facingMode,
+                        width: { ideal: 640 },
+                        height: { ideal: 480 },
+                    },
+                    audio: false,
+                };
+                
+                stream = await navigator.mediaDevices.getUserMedia(constraints);
+                video.srcObject = stream;
+                await video.play();
+                
+                // Настраиваем canvas под размер видео
+                canvas.width = video.videoWidth || 640;
+                canvas.height = video.videoHeight || 480;
+                
+                currentFacing = facingMode;
+                return true;
+            } catch (err) {
+                cameraState.innerText = '❌ Ошибка';
+                logMessage('❌ Ошибка камеры: ' + err.message, true);
+                return false;
+            }
+        }
+
+        function stopCamera() {
+            if (stream) {
+                stream.getTracks().forEach(t => t.stop());
+                stream = null;
+            }
+            video.srcObject = null;
+            cameraState.innerText = 'Остановлена';
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+
+        // --- ПЕРЕКЛЮЧЕНИЕ КАМЕРЫ ---
+        async function switchCamera() {
+            if (!isRunning) return;
+            
+            const newFacing = currentFacing === 'environment' ? 'user' : 'environment';
+            const ok = await startCamera(newFacing);
+            if (ok) {
+                logMessage(`🔄 Переключено на ${newFacing === 'environment' ? 'основную' : 'фронтальную'} камеру`);
+                // Перезапускаем Face Mesh
+                if (faceMesh) {
+                    try {
+                        await faceMesh.initialize();
+                    } catch (e) {}
+                }
+            }
+        }
+
+        // --- ЗАПУСК / ОСТАНОВКА ---
+        async function startAll() {
+            if (isRunning) return;
+
+            const ok = await startCamera('environment');
+            if (!ok) return;
+
+            // Инициализируем Face Mesh
+            if (!faceMesh) {
+                initFaceMesh();
+            }
+
+            // Запускаем Face Mesh
+            const meshOk = await startFaceMesh();
+            if (!meshOk) return;
+
+            if (audioCtx && audioCtx.state === 'closed') {
+                audioCtx = null;
+            }
+
+            isRunning = true;
+            startBtn.disabled = true;
+            stopBtn.disabled = false;
+            switchCamBtn.disabled = false;
+
+            lastPosition = 'back';
+            lastCaptureTime = 0;
+            timeSinceLastCapture = 0;
+            updateStatus('back');
+            logMessage('🔍 Мониторинг запущен (Face Mesh)');
+            
+            startTimer();
+        }
+
+        function stopAll() {
+            if (!isRunning) return;
+
+            isRunning = false;
+            stopCamera();
+            stopAlarmLoop();
+            stopTimer();
+            if (audioCtx) {
+                try { audioCtx.close(); } catch(e) {}
+                audioCtx = null;
+            }
+
+            startBtn.disabled = false;
+            stopBtn.disabled = true;
+            switchCamBtn.disabled = true;
+            detectState.innerText = 'Остановлен';
+            detectState.style.color = '#9bb7d4';
+            liveDot.className = 'dot';
+            liveLabel.innerText = 'Офлайн';
+            logMessage('⏹ Мониторинг остановлен');
+            statusBadge.className = 'status-badge status-safe';
+            statusText.innerText = 'На спине';
+            document.querySelector('.status-badge .icon').innerHTML = '✅';
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+        }
+
+        // --- КНОПКИ ---
+        startBtn.addEventListener('click', startAll);
+        stopBtn.addEventListener('click', stopAll);
+        switchCamBtn.addEventListener('click', switchCamera);
+
+        window.addEventListener('load', () => {
+            logMessage('🟢 Готов. Нажмите "Запуск"');
+            cameraState.innerText = 'Ожидание';
+            detectState.innerText = 'Готов';
+            liveLabel.innerText = 'Офлайн';
+            renderGallery();
+            
+            // Инициализируем Face Mesh заранее
+            initFaceMesh();
+        });
+
+        window.addEventListener('beforeunload', () => {
+            stopAll();
+        });
+
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden && isRunning && currentPosition === 'stomach') {
+                stopAlarmLoop();
+                startAlarmLoop();
+            }
+        });
+
+        // Обработка изменения размера
+        function resizeCanvas() {
+            if (video.videoWidth && video.videoHeight) {
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+            }
+        }
+        video.addEventListener('loadedmetadata', resizeCanvas);
+
+    })();
+</script>
+
+</body>
+</html>
