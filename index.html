@@ -1,0 +1,1115 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Детектор положения — ночной режим</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+        body {
+            font-family: 'Segoe UI', Roboto, system-ui, sans-serif;
+            background: #0b1729;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 12px;
+            color: #fff;
+        }
+        .container {
+            max-width: 720px;
+            width: 100%;
+            background: #1a2b3f;
+            border-radius: 40px;
+            padding: 22px 18px 28px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.7);
+            text-align: center;
+            border: 1px solid #314a66;
+        }
+        h1 {
+            font-weight: 500;
+            font-size: 1.6rem;
+            letter-spacing: 0.5px;
+            margin-bottom: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+        h1 small {
+            font-size: 0.9rem;
+            opacity: 0.6;
+            font-weight: 300;
+        }
+        .video-wrapper {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 4 / 3;
+            background: #0a121c;
+            border-radius: 28px;
+            overflow: hidden;
+            margin: 14px 0 18px;
+            border: 2px solid #3f597a;
+            box-shadow: inset 0 0 30px rgba(0,0,0,0.8);
+        }
+        #video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+            transform: scaleX(-1);
+        }
+        .live-status {
+            position: absolute;
+            top: 16px;
+            left: 16px;
+            right: 16px;
+            display: flex;
+            justify-content: center;
+            pointer-events: none;
+            z-index: 10;
+        }
+        .status-badge {
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(10px);
+            padding: 10px 28px;
+            border-radius: 60px;
+            font-size: 1.5rem;
+            font-weight: 600;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.6);
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            transition: all 0.15s ease;
+            letter-spacing: 0.3px;
+        }
+        .status-badge .icon {
+            font-size: 2rem;
+            line-height: 1;
+        }
+        .status-safe {
+            background: rgba(34, 197, 94, 0.3);
+            border-color: #4ade80;
+            color: #dcfce7;
+            box-shadow: 0 0 20px rgba(34, 197, 94, 0.2);
+        }
+        .status-warning {
+            background: rgba(251, 191, 36, 0.35);
+            border-color: #fbbf24;
+            color: #fef3c7;
+            box-shadow: 0 0 20px rgba(251, 191, 36, 0.15);
+        }
+        .status-danger {
+            background: rgba(239, 68, 68, 0.45);
+            border-color: #f87171;
+            color: #fecaca;
+            animation: pulse-danger 1.2s infinite;
+            box-shadow: 0 0 30px rgba(239, 68, 68, 0.4);
+        }
+        @keyframes pulse-danger {
+            0% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.5); }
+            70% { box-shadow: 0 0 0 18px rgba(239, 68, 68, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+        }
+
+        .info-panel {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            background: #142433;
+            padding: 12px 18px;
+            border-radius: 40px;
+            margin: 6px 0 14px;
+            flex-wrap: wrap;
+            font-size: 0.95rem;
+            border: 1px solid #2d4560;
+        }
+        .info-item {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            opacity: 0.9;
+        }
+        .info-item span {
+            font-weight: 600;
+            color: #b6d0e8;
+        }
+        .live-indicator {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+            background: #4ade80;
+            transition: 0.2s;
+        }
+        .dot-warning {
+            background: #fbbf24;
+            animation: pulse-warning 1s infinite;
+        }
+        .dot-danger {
+            background: #f87171;
+            animation: blink-dot 0.8s infinite;
+        }
+        @keyframes pulse-warning {
+            0% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.5; transform: scale(0.9); }
+            100% { opacity: 1; transform: scale(1); }
+        }
+        @keyframes blink-dot {
+            0% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.2; transform: scale(0.8); }
+            100% { opacity: 1; transform: scale(1); }
+        }
+
+        .btn-group {
+            display: flex;
+            justify-content: center;
+            gap: 14px;
+            flex-wrap: wrap;
+            margin: 8px 0 6px;
+        }
+        .btn {
+            background: #2f4460;
+            border: none;
+            color: white;
+            padding: 12px 28px;
+            border-radius: 60px;
+            font-size: 1.1rem;
+            font-weight: 500;
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+            transition: 0.2s;
+            border: 1px solid #4a637f;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.3);
+            flex: 1 1 auto;
+            justify-content: center;
+        }
+        .btn-primary {
+            background: #3b6ea0;
+            border-color: #6b9ed4;
+        }
+        .btn-primary:hover:not(:disabled) {
+            background: #4a7fb3;
+            transform: scale(1.02);
+        }
+        .btn-danger {
+            background: #b13e3e;
+            border-color: #d66a6a;
+        }
+        .btn-danger:hover:not(:disabled) {
+            background: #c44a4a;
+        }
+        .btn-secondary {
+            background: #2d5a7a;
+            border-color: #4f8ab0;
+        }
+        .btn-secondary:hover:not(:disabled) {
+            background: #3a6f94;
+        }
+        .btn:disabled {
+            opacity: 0.4;
+            transform: none;
+            pointer-events: none;
+        }
+
+        #log {
+            background: #0c1a28;
+            padding: 8px 16px;
+            border-radius: 40px;
+            font-size: 0.9rem;
+            color: #9bb7d4;
+            margin-top: 12px;
+            border: 1px solid #2a4058;
+            min-height: 2.8rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .footnote {
+            font-size: 0.75rem;
+            opacity: 0.45;
+            margin-top: 14px;
+            letter-spacing: 0.3px;
+        }
+
+        .brightness-bar {
+            width: 100%;
+            height: 8px;
+            background: #0c1a28;
+            border-radius: 10px;
+            margin: 8px 0 4px;
+            overflow: hidden;
+            position: relative;
+        }
+        .brightness-fill {
+            height: 100%;
+            border-radius: 10px;
+            transition: width 0.2s;
+            background: linear-gradient(90deg, #ef4444, #fbbf24, #4ade80);
+        }
+        .brightness-label {
+            font-size: 0.7rem;
+            opacity: 0.5;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        /* Метки порогов на полоске */
+        .threshold-markers {
+            position: relative;
+            width: 100%;
+            height: 0;
+            margin-top: -8px;
+            display: flex;
+            justify-content: space-between;
+            padding: 0 2px;
+            pointer-events: none;
+        }
+        .threshold-markers .marker {
+            width: 2px;
+            height: 16px;
+            background: rgba(255,255,255,0.3);
+            position: relative;
+            top: -16px;
+        }
+        .threshold-markers .marker-label {
+            position: absolute;
+            top: 6px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 0.5rem;
+            opacity: 0.4;
+            white-space: nowrap;
+        }
+
+        .gallery-section {
+            margin-top: 16px;
+            border-top: 1px solid #2d4560;
+            padding-top: 14px;
+        }
+        .gallery-title {
+            font-size: 0.9rem;
+            opacity: 0.7;
+            margin-bottom: 10px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .gallery-title span {
+            background: #2d4560;
+            padding: 2px 12px;
+            border-radius: 20px;
+            font-size: 0.8rem;
+        }
+        .gallery-title .info-text {
+            background: none;
+            font-size: 0.7rem;
+            opacity: 0.5;
+            padding: 0;
+        }
+        .gallery-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+            gap: 10px;
+            max-height: 300px;
+            overflow-y: auto;
+            padding: 4px;
+        }
+        .gallery-grid::-webkit-scrollbar {
+            width: 4px;
+        }
+        .gallery-grid::-webkit-scrollbar-track {
+            background: #0c1a28;
+            border-radius: 10px;
+        }
+        .gallery-grid::-webkit-scrollbar-thumb {
+            background: #3f597a;
+            border-radius: 10px;
+        }
+        .gallery-item {
+            background: #0c1a28;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 1px solid #2d4560;
+            position: relative;
+        }
+        .gallery-item img {
+            width: 100%;
+            aspect-ratio: 4/3;
+            object-fit: cover;
+            display: block;
+        }
+        .gallery-item .badge {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            font-size: 0.6rem;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-weight: 600;
+        }
+        .badge-side {
+            background: #fbbf24;
+            color: #0b1729;
+        }
+        .badge-stomach {
+            background: #ef4444;
+            color: white;
+        }
+        .gallery-item .time {
+            font-size: 0.55rem;
+            opacity: 0.6;
+            padding: 4px 6px;
+            text-align: center;
+            background: #0a121c;
+        }
+        .gallery-empty {
+            color: #4a637f;
+            font-size: 0.85rem;
+            padding: 20px;
+            text-align: center;
+            grid-column: 1 / -1;
+        }
+        .clear-btn {
+            background: none;
+            border: 1px solid #4a637f;
+            color: #9bb7d4;
+            padding: 2px 14px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 0.7rem;
+            transition: 0.2s;
+        }
+        .clear-btn:hover {
+            background: #4a637f;
+            color: white;
+        }
+
+        .calibration-info {
+            font-size: 0.7rem;
+            opacity: 0.5;
+            margin-top: 2px;
+            display: flex;
+            justify-content: center;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+        .calibration-info .val {
+            color: #b6d0e8;
+            font-weight: 600;
+        }
+
+        @media (max-width: 500px) {
+            .container { padding: 14px; }
+            .status-badge { font-size: 1.2rem; padding: 6px 16px; gap: 6px; }
+            .status-badge .icon { font-size: 1.5rem; }
+            .btn { padding: 10px 14px; font-size: 0.95rem; }
+            .info-panel { font-size: 0.8rem; padding: 8px 12px; }
+            .gallery-grid {
+                grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+            }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>
+        👶 Монитор <small>ночной</small>
+    </h1>
+
+    <div class="video-wrapper">
+        <video id="video" autoplay playsinline muted></video>
+        <div class="live-status">
+            <div id="statusBadge" class="status-badge status-safe">
+                <span class="icon">✅</span>
+                <span id="statusText">На спине</span>
+            </div>
+        </div>
+    </div>
+
+    <div class="info-panel">
+        <div class="info-item">📷 <span id="cameraState">Ожидание</span></div>
+        <div class="info-item live-indicator">
+            <span id="liveDot" class="dot"></span>
+            <span id="liveLabel">Онлайн</span>
+        </div>
+        <div class="info-item">💡 <span id="brightnessDisplay">0%</span></div>
+        <div class="info-item">⏱ <span id="timerDisplay">0с</span></div>
+    </div>
+
+    <!-- Полоска яркости с порогами -->
+    <div class="brightness-bar">
+        <div class="brightness-fill" id="brightnessFill" style="width: 50%"></div>
+    </div>
+    <div class="threshold-markers">
+        <div class="marker" style="left: 0%;">
+            <span class="marker-label">🌑 0%</span>
+        </div>
+        <div class="marker" id="thresholdMarker" style="left: 30%;">
+            <span class="marker-label" id="thresholdLabel">⚠️ ПОРОГ</span>
+        </div>
+        <div class="marker" style="left: 100%;">
+            <span class="marker-label">100% ☀️</span>
+        </div>
+    </div>
+
+    <div class="calibration-info">
+        <span>Калибровка: <span class="val" id="calibStatus">ожидание...</span></span>
+        <span>Порог: <span class="val" id="thresholdValue">0%</span></span>
+        <span>Режим: <span class="val" id="modeDisplay">—</span></span>
+    </div>
+
+    <div class="btn-group">
+        <button id="startBtn" class="btn btn-primary">▶ Запуск</button>
+        <button id="switchCamBtn" class="btn btn-secondary" disabled>🔄 Сменить камеру</button>
+        <button id="stopBtn" class="btn btn-danger" disabled>⏹ Стоп</button>
+    </div>
+
+    <div id="log">
+        <span>🟢 Нажмите «Запуск» для начала мониторинга</span>
+    </div>
+
+    <div class="gallery-section">
+        <div class="gallery-title">
+            <span>📸 Зафиксированные моменты</span>
+            <span class="info-text">моментальная фиксация</span>
+            <span id="captureCount">0</span>
+            <button class="clear-btn" id="clearGalleryBtn">Очистить</button>
+        </div>
+        <div class="gallery-grid" id="galleryGrid">
+            <div class="gallery-empty">Здесь будут снимки при переворотах на живот</div>
+        </div>
+    </div>
+
+    <div class="footnote">🔊 Автоматическая калибровка при запуске. Тревога когда яркость падает ниже порога.</div>
+</div>
+
+<script>
+    (function() {
+        // --- DOM ---
+        const video = document.getElementById('video');
+        const statusBadge = document.getElementById('statusBadge');
+        const statusText = document.getElementById('statusText');
+        const cameraState = document.getElementById('cameraState');
+        const detectState = document.getElementById('detectState');
+        const logEl = document.getElementById('log');
+        const liveDot = document.getElementById('liveDot');
+        const liveLabel = document.getElementById('liveLabel');
+        const galleryGrid = document.getElementById('galleryGrid');
+        const captureCount = document.getElementById('captureCount');
+        const timerDisplay = document.getElementById('timerDisplay');
+        const brightnessFill = document.getElementById('brightnessFill');
+        const brightnessDisplay = document.getElementById('brightnessDisplay');
+        const thresholdMarker = document.getElementById('thresholdMarker');
+        const thresholdLabel = document.getElementById('thresholdLabel');
+        const thresholdValue = document.getElementById('thresholdValue');
+        const calibStatus = document.getElementById('calibStatus');
+        const modeDisplay = document.getElementById('modeDisplay');
+
+        const startBtn = document.getElementById('startBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const switchCamBtn = document.getElementById('switchCamBtn');
+        const clearGalleryBtn = document.getElementById('clearGalleryBtn');
+
+        // --- НАСТРОЙКИ ---
+        const CALIBRATION_DURATION = 5000; // 5 секунд калибровки
+        const MIN_BRIGHTNESS_CHANGE = 12; // минимальное изменение яркости для переворота
+        let baseBrightness = 50; // базовый уровень (калибруется)
+        let thresholdPercent = 0.35; // 35% от базового = порог живота
+        let sideThresholdPercent = 0.55; // 55% от базового = порог бока
+        let isCalibrated = false;
+        let calibrationSamples = [];
+        
+        // --- состояние ---
+        let stream = null;
+        let animationId = null;
+        let isRunning = false;
+        let currentPosition = 'back';
+        let lastPosition = 'back';
+        let currentFacing = 'environment';
+        let captureHistory = [];
+        
+        const CAPTURE_INTERVAL = 20000;
+        let lastCaptureTime = 0;
+        let timeSinceLastCapture = 0;
+        let timerInterval = null;
+        let isAlarmCooldown = false;
+
+        let audioCtx = null;
+        let alarmInterval = null;
+
+        // --- лог ---
+        function logMessage(msg, isWarning = false) {
+            const time = new Date().toLocaleTimeString();
+            const prefix = isWarning ? '⚠️' : 'ℹ️';
+            logEl.innerHTML = `<span>${prefix} [${time}] ${msg}</span>`;
+        }
+
+        // --- ЗВУК ---
+        function playAlarmBeep() {
+            try {
+                if (!audioCtx) {
+                    audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                }
+                if (audioCtx.state === 'suspended') {
+                    audioCtx.resume();
+                }
+                const osc = audioCtx.createOscillator();
+                const gain = audioCtx.createGain();
+                osc.type = 'square';
+                osc.frequency.value = 880;
+                gain.gain.value = 0.4;
+                osc.connect(gain);
+                gain.connect(audioCtx.destination);
+                osc.start();
+                osc.stop(audioCtx.currentTime + 0.2);
+
+                setTimeout(() => {
+                    try {
+                        const osc2 = audioCtx.createOscillator();
+                        const gain2 = audioCtx.createGain();
+                        osc2.type = 'sawtooth';
+                        osc2.frequency.value = 660;
+                        gain2.gain.value = 0.2;
+                        osc2.connect(gain2);
+                        gain2.connect(audioCtx.destination);
+                        osc2.start();
+                        osc2.stop(audioCtx.currentTime + 0.15);
+                    } catch (_) {}
+                }, 100);
+            } catch (e) { /* игнорируем */ }
+        }
+
+        function startAlarmLoop() {
+            if (alarmInterval) return;
+            isAlarmCooldown = false;
+            playAlarmBeep();
+            alarmInterval = setInterval(() => {
+                if (isRunning && currentPosition === 'stomach') {
+                    playAlarmBeep();
+                } else {
+                    stopAlarmLoop();
+                }
+            }, 900);
+        }
+
+        function stopAlarmLoop() {
+            if (alarmInterval) {
+                clearInterval(alarmInterval);
+                alarmInterval = null;
+            }
+        }
+
+        // --- ТАЙМЕР ---
+        function startTimer() {
+            if (timerInterval) return;
+            timeSinceLastCapture = 0;
+            timerInterval = setInterval(() => {
+                timeSinceLastCapture += 1000;
+                const seconds = Math.floor(timeSinceLastCapture / 1000);
+                timerDisplay.textContent = `${seconds}с`;
+                if (timeSinceLastCapture >= CAPTURE_INTERVAL) {
+                    timeSinceLastCapture = 0;
+                    if (currentPosition === 'side' || currentPosition === 'stomach') {
+                        takeScreenshot(currentPosition);
+                    }
+                }
+            }, 1000);
+        }
+
+        function stopTimer() {
+            if (timerInterval) {
+                clearInterval(timerInterval);
+                timerInterval = null;
+            }
+            timerDisplay.textContent = '0с';
+            timeSinceLastCapture = 0;
+        }
+
+        // --- СКРИНШОТ (моментальный при перевороте) ---
+        function takeScreenshot(position) {
+            const now = Date.now();
+            // При перевороте на живот — делаем скриншот сразу, без задержки
+            if (position === 'stomach' && !isAlarmCooldown) {
+                isAlarmCooldown = true;
+                setTimeout(() => { isAlarmCooldown = false; }, 3000);
+            }
+            
+            if (now - lastCaptureTime < 5000 && position !== 'stomach') return;
+            lastCaptureTime = now;
+            timeSinceLastCapture = 0;
+
+            const w = video.videoWidth;
+            const h = video.videoHeight;
+            if (!w || !h) return;
+
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = w;
+            tempCanvas.height = h;
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCtx.drawImage(video, 0, 0, w, h);
+
+            const dataUrl = tempCanvas.toDataURL('image/jpeg', 0.8);
+            const date = new Date();
+            const timeStr = date.toLocaleTimeString();
+            const dateStr = date.toLocaleDateString();
+
+            const entry = {
+                dataUrl: dataUrl,
+                position: position,
+                time: timeStr,
+                date: dateStr,
+                timestamp: now
+            };
+
+            captureHistory.unshift(entry);
+            if (captureHistory.length > 50) {
+                captureHistory.pop();
+            }
+
+            renderGallery();
+            const posName = position === 'side' ? 'БОК' : 'ЖИВОТ';
+            logMessage(`📸 ${posName === 'ЖИВОТ' ? '🚨' : '⚠️'} Скриншот (${posName}) ${timeStr}`, true);
+        }
+
+        // --- ГАЛЕРЕЯ ---
+        function renderGallery() {
+            if (captureHistory.length === 0) {
+                galleryGrid.innerHTML = `<div class="gallery-empty">Здесь будут снимки при переворотах на живот</div>`;
+                captureCount.textContent = '0';
+                return;
+            }
+
+            let html = '';
+            captureHistory.forEach((entry) => {
+                const badgeClass = entry.position === 'side' ? 'badge-side' : 'badge-stomach';
+                const label = entry.position === 'side' ? 'БОК' : 'ЖИВОТ';
+                html += `
+                    <div class="gallery-item">
+                        <img src="${entry.dataUrl}" alt="Скриншот ${label}" loading="lazy">
+                        <span class="badge ${badgeClass}">${label}</span>
+                        <div class="time">${entry.time} ${entry.date}</div>
+                    </div>
+                `;
+            });
+
+            galleryGrid.innerHTML = html;
+            captureCount.textContent = captureHistory.length;
+        }
+
+        function clearGallery() {
+            captureHistory = [];
+            renderGallery();
+            logMessage('🗑️ Галерея очищена');
+        }
+        clearGalleryBtn.addEventListener('click', clearGallery);
+
+        // ============================================
+        // КАЛИБРОВКА
+        // ============================================
+        function calibrateBrightness() {
+            return new Promise((resolve) => {
+                logMessage('🔧 Калибровка освещения... Подождите 5 секунд');
+                calibStatus.textContent = 'калибровка...';
+                calibrationSamples = [];
+                
+                let samples = [];
+                let sampleCount = 0;
+                const maxSamples = 30;
+                
+                const collectSample = () => {
+                    if (!isRunning || sampleCount >= maxSamples) {
+                        // Калибровка завершена
+                        if (samples.length > 5) {
+                            // Берём медиану
+                            samples.sort((a, b) => a - b);
+                            const median = samples[Math.floor(samples.length / 2)];
+                            baseBrightness = median;
+                            
+                            // Динамический порог: 35% от базового для живота, 55% для бока
+                            const threshold = Math.max(8, baseBrightness * thresholdPercent);
+                            const sideThreshold = Math.max(15, baseBrightness * sideThresholdPercent);
+                            
+                            isCalibrated = true;
+                            calibStatus.textContent = '✅ готова';
+                            thresholdValue.textContent = `${Math.round(threshold)}%`;
+                            modeDisplay.textContent = baseBrightness > 40 ? '☀️ светлый' : '🌙 ночной';
+                            
+                            // Обновляем маркер порога
+                            const markerPos = (threshold / 100) * 100;
+                            thresholdMarker.style.left = `${Math.min(95, Math.max(5, markerPos))}%`;
+                            thresholdLabel.textContent = `🔴 ${Math.round(threshold)}%`;
+                            
+                            logMessage(`✅ Калибровка завершена. Базовый уровень: ${Math.round(baseBrightness)}%, порог: ${Math.round(threshold)}%`);
+                            resolve();
+                        } else {
+                            // Недостаточно данных, используем значения по умолчанию
+                            baseBrightness = 50;
+                            isCalibrated = true;
+                            calibStatus.textContent = '⚠️ по умолчанию';
+                            thresholdValue.textContent = '18%';
+                            modeDisplay.textContent = '⚙️ стандарт';
+                            logMessage('⚠️ Недостаточно данных для калибровки, использованы стандартные значения');
+                            resolve();
+                        }
+                        return;
+                    }
+                    
+                    // Собираем текущую яркость
+                    const brightness = getCurrentBrightness();
+                    if (brightness > 1) {
+                        samples.push(brightness);
+                    }
+                    sampleCount++;
+                    
+                    // Показываем прогресс
+                    calibStatus.textContent = `калибровка ${Math.round((sampleCount/maxSamples)*100)}%`;
+                    
+                    setTimeout(collectSample, 150);
+                };
+                
+                collectSample();
+            });
+        }
+
+        // --- ПОЛУЧЕНИЕ ЯРКОСТИ ---
+        let smoothBrightness = 50;
+        let currentBrightness = 50;
+
+        function getCurrentBrightness() {
+            if (!video.videoWidth || !video.videoHeight) return 50;
+
+            const w = video.videoWidth;
+            const h = video.videoHeight;
+
+            // Берём центральную часть кадра (где лицо)
+            const cropX = Math.floor(w * 0.2);
+            const cropY = Math.floor(h * 0.15);
+            const cropW = Math.floor(w * 0.6);
+            const cropH = Math.floor(h * 0.6);
+
+            const tempCanvas = document.createElement('canvas');
+            tempCanvas.width = cropW;
+            tempCanvas.height = cropH;
+            const tempCtx = tempCanvas.getContext('2d');
+            tempCtx.drawImage(video, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
+
+            const imageData = tempCtx.getImageData(0, 0, cropW, cropH);
+            const data = imageData.data;
+
+            let totalBrightness = 0;
+            let count = 0;
+
+            for (let i = 0; i < data.length; i += 4) {
+                const r = data[i];
+                const g = data[i + 1];
+                const b = data[i + 2];
+                const brightness = 0.299 * r + 0.587 * g + 0.114 * b;
+                totalBrightness += brightness;
+                count++;
+            }
+
+            return count > 0 ? (totalBrightness / count / 255) * 100 : 50;
+        }
+
+        // --- АНАЛИЗ ЯРКОСТИ ---
+        function analyzeBrightness() {
+            if (!video.videoWidth || !video.videoHeight) return;
+
+            const rawBrightness = getCurrentBrightness();
+            
+            // Сглаживание
+            smoothBrightness = smoothBrightness * 0.7 + rawBrightness * 0.3;
+            currentBrightness = Math.round(smoothBrightness);
+
+            // Обновляем UI
+            brightnessFill.style.width = Math.min(100, currentBrightness) + '%';
+            brightnessDisplay.textContent = currentBrightness + '%';
+
+            if (!isCalibrated) return;
+
+            // Вычисляем динамические пороги
+            const stomachThreshold = Math.max(8, baseBrightness * thresholdPercent);
+            const sideThreshold = Math.max(15, baseBrightness * sideThresholdPercent);
+
+            // === ОПРЕДЕЛЯЕМ ПОЛОЖЕНИЕ ===
+            let position = 'back';
+
+            if (currentBrightness < stomachThreshold) {
+                position = 'stomach'; // ЖИВОТ — темно
+            } else if (currentBrightness < sideThreshold) {
+                position = 'side'; // БОК — средняя яркость
+            } else {
+                position = 'back'; // СПИНА — светло
+            }
+
+            // Проверяем изменение яркости для моментального скриншота при перевороте
+            if (position === 'stomach' && lastPosition !== 'stomach') {
+                // Моментальный скриншот при перевороте на живот
+                setTimeout(() => {
+                    if (isRunning && currentPosition === 'stomach') {
+                        takeScreenshot('stomach');
+                    }
+                }, 300);
+            }
+
+            updateStatus(position);
+        }
+
+        // --- ОБНОВЛЕНИЕ СТАТУСА ---
+        function updateStatus(position) {
+            currentPosition = position;
+
+            let icon, text, className, dotClass, labelText, stateText, stateColor;
+
+            switch(position) {
+                case 'back':
+                    icon = '✅';
+                    text = 'На спине';
+                    className = 'status-safe';
+                    dotClass = 'dot';
+                    labelText = 'Онлайн';
+                    stateText = 'Безопасно';
+                    stateColor = '#86efac';
+                    stopAlarmLoop();
+                    break;
+                case 'side':
+                    icon = '⚠️';
+                    text = 'На боку';
+                    className = 'status-warning';
+                    dotClass = 'dot dot-warning';
+                    labelText = 'Бок';
+                    stateText = 'На боку';
+                    stateColor = '#fbbf24';
+                    stopAlarmLoop();
+                    break;
+                case 'stomach':
+                    icon = '🔴';
+                    text = 'НА ЖИВОТЕ!';
+                    className = 'status-danger';
+                    dotClass = 'dot dot-danger';
+                    labelText = 'ТРЕВОГА';
+                    stateText = '⚠️ ОПАСНО!';
+                    stateColor = '#fca5a5';
+                    startAlarmLoop();
+                    break;
+            }
+
+            statusBadge.className = `status-badge ${className}`;
+            statusText.innerText = text;
+            document.querySelector('.status-badge .icon').innerHTML = icon;
+            liveDot.className = dotClass;
+            liveLabel.innerText = labelText;
+            detectState.innerText = stateText;
+            detectState.style.color = stateColor;
+
+            if (lastPosition !== position) {
+                const isDanger = position === 'stomach' || position === 'side';
+                lastPosition = position;
+                const posNames = { back: 'спину', side: 'бок', stomach: 'живот' };
+                logMessage(`🔄 ${isDanger ? '⚠️' : '✅'} Положение: ${posNames[position]} (яркость: ${currentBrightness}%)`);
+                if (position === 'stomach') {
+                    logMessage('🚨 РЕБЁНОК НА ЖИВОТЕ!', true);
+                    // Моментальный скриншот
+                    setTimeout(() => {
+                        if (isRunning && currentPosition === 'stomach') {
+                            takeScreenshot('stomach');
+                        }
+                    }, 500);
+                }
+                if (position === 'side' || position === 'stomach') {
+                    timeSinceLastCapture = CAPTURE_INTERVAL - 5000;
+                }
+            }
+        }
+
+        // --- ЦИКЛ ---
+        function startDetectionLoop() {
+            if (!isRunning) return;
+
+            function loop() {
+                if (!isRunning) return;
+                try {
+                    analyzeBrightness();
+                } catch (e) {
+                    // игнорируем
+                }
+                animationId = requestAnimationFrame(loop);
+            }
+            loop();
+        }
+
+        // --- КАМЕРА ---
+        async function startCamera(facingMode = 'environment') {
+            try {
+                if (stream) {
+                    stream.getTracks().forEach(t => t.stop());
+                    stream = null;
+                }
+
+                const constraints = {
+                    video: {
+                        facingMode: facingMode,
+                        width: { ideal: 640 },
+                        height: { ideal: 480 },
+                    },
+                    audio: false,
+                };
+                
+                stream = await navigator.mediaDevices.getUserMedia(constraints);
+                video.srcObject = stream;
+                await video.play();
+                cameraState.innerText = 'Активна';
+                currentFacing = facingMode;
+                logMessage(`📷 Камера запущена (${facingMode === 'environment' ? 'основная' : 'фронтальная'})`);
+                return true;
+            } catch (err) {
+                cameraState.innerText = '❌ Ошибка';
+                logMessage('❌ Ошибка камеры: ' + err.message, true);
+                return false;
+            }
+        }
+
+        function stopCamera() {
+            if (stream) {
+                stream.getTracks().forEach(t => t.stop());
+                stream = null;
+            }
+            video.srcObject = null;
+            cameraState.innerText = 'Остановлена';
+        }
+
+        // --- ПЕРЕКЛЮЧЕНИЕ КАМЕРЫ ---
+        async function switchCamera() {
+            if (!isRunning) return;
+            
+            const newFacing = currentFacing === 'environment' ? 'user' : 'environment';
+            const ok = await startCamera(newFacing);
+            if (ok) {
+                logMessage(`🔄 Переключено на ${newFacing === 'environment' ? 'основную' : 'фронтальную'} камеру`);
+                // Перекалибровка после смены камеры
+                isCalibrated = false;
+                setTimeout(async () => {
+                    if (isRunning) {
+                        await calibrateBrightness();
+                    }
+                }, 1000);
+            }
+        }
+
+        // --- ЗАПУСК / ОСТАНОВКА ---
+        async function startAll() {
+            if (isRunning) return;
+
+            const ok = await startCamera('environment');
+            if (!ok) return;
+
+            if (audioCtx && audioCtx.state === 'closed') {
+                audioCtx = null;
+            }
+
+            isRunning = true;
+            startBtn.disabled = true;
+            stopBtn.disabled = false;
+            switchCamBtn.disabled = false;
+
+            lastPosition = 'back';
+            lastCaptureTime = 0;
+            timeSinceLastCapture = 0;
+            smoothBrightness = 50;
+            isCalibrated = false;
+            
+            updateStatus('back');
+            logMessage('🔍 Мониторинг запущен, идёт калибровка...');
+            
+            // Калибровка
+            await calibrateBrightness();
+            
+            startTimer();
+            startDetectionLoop();
+        }
+
+        function stopAll() {
+            if (!isRunning) return;
+
+            isRunning = false;
+            if (animationId) {
+                cancelAnimationFrame(animationId);
+                animationId = null;
+            }
+            stopCamera();
+            stopAlarmLoop();
+            stopTimer();
+            if (audioCtx) {
+                try { audioCtx.close(); } catch(e) {}
+                audioCtx = null;
+            }
+
+            startBtn.disabled = false;
+            stopBtn.disabled = true;
+            switchCamBtn.disabled = true;
+            detectState.innerText = 'Остановлен';
+            detectState.style.color = '#9bb7d4';
+            liveDot.className = 'dot';
+            liveLabel.innerText = 'Офлайн';
+            logMessage('⏹ Мониторинг остановлен');
+            statusBadge.className = 'status-badge status-safe';
+            statusText.innerText = 'На спине';
+            document.querySelector('.status-badge .icon').innerHTML = '✅';
+            isCalibrated = false;
+            calibStatus.textContent = 'ожидание...';
+        }
+
+        // --- КНОПКИ ---
+        startBtn.addEventListener('click', startAll);
+        stopBtn.addEventListener('click', stopAll);
+        switchCamBtn.addEventListener('click', switchCamera);
+
+        window.addEventListener('load', () => {
+            logMessage('🟢 Готов. Нажмите "Запуск"');
+            cameraState.innerText = 'Ожидание';
+            detectState.innerText = 'Готов';
+            liveLabel.innerText = 'Офлайн';
+            renderGallery();
+        });
+
+        window.addEventListener('beforeunload', () => {
+            stopAll();
+        });
+
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden && isRunning && currentPosition === 'stomach') {
+                stopAlarmLoop();
+                startAlarmLoop();
+            }
+        });
+
+        // Обработка изменения размера
+        function resizeCanvas() {
+            // Для видео не нужно
+        }
+
+    })();
+</script>
+
+</body>
+</html>
